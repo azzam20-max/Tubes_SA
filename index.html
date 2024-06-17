@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Visualization</title>
+    <style>
+        #network {
+            width: 100%;
+            height: 70vh;
+            border: 1px solid lightgray;
+        }
+        #controls {
+            margin: 20px 0;
+        }
+        label {
+            margin-right: 10px;
+        }
+    </style>
+    <!-- Memasukkan pustaka vis.js -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+    <div id="controls">
+        <label for="nodes">Nodes (format: id,label):</label>
+        <input type="text" id="nodes" placeholder="1,Node 1;2,Node 2;3,Node 3">
+        <br><br>
+        <label for="edges">Edges (format: from,to,weight):</label>
+        <input type="text" id="edges" placeholder="1,2,1;2,3,2;3,1,3">
+        <br><br>
+        <button onclick="createGraph()">Create Graph</button>
+        <br><br>
+        <label for="startNode">Start Node:</label>
+        <input type="text" id="startNode" placeholder="1">
+        <label for="endNode">End Node:</label>
+        <input type="text" id="endNode" placeholder="5">
+        <button onclick="findShortestPath()">Brute Force Search</button>
+        <button onclick="findGreedyPath()">Greedy Search</button>
+        <br><br>
+        <div id="output"></div>
+    </div>
+    <div id="network"></div>
+
+    <script>
+        var network, nodes, edges;
+
+        function createGraph() {
+            // Mengambil input nodes
+            var nodeInput = document.getElementById('nodes').value;
+            var nodesArray = nodeInput.split(';').map(function(node) {
+                var parts = node.split(',');
+                return {
+                    id: parseInt(parts[0]),
+                    label: parts[1],
+                    shape: 'image',
+                    image: 'computer_icon.png'
+                };
+            });
+
+            // Mengambil input edges
+            var edgeInput = document.getElementById('edges').value;
+            var edgesArray = edgeInput.split(';').map(function(edge) {
+                var parts = edge.split(',');
+                return {
+                    from: parseInt(parts[0]),
+                    to: parseInt(parts[1]),
+                    label: parts[2],
+                    length: 200,
+                    weight: parseInt(parts[2])
+                };
+            });
+
+            // Membuat data set
+            nodes = new vis.DataSet(nodesArray);
+            edges = new vis.DataSet(edgesArray);
+
+            // Membuat jaringan
+            var container = document.getElementById('network');
+            var data = {
+                nodes: nodes,
+                edges: edges
+            };
+            var options = {};
+            network = new vis.Network(container, data, options);
+        }
+
+        function findShortestPath() {
+            var startNode = parseInt(document.getElementById('startNode').value);
+            var endNode = parseInt(document.getElementById('endNode').value);
+
+            var allEdges = edges.get();
+            var startTime = performance.now();
+
+            var result = exhaustiveSearch(startNode, endNode, allEdges);
+            var endTime = performance.now();
+            var executionTime = endTime - startTime;
+            var complexity = `O(n!)`;
+
+            var outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = `
+                Shortest Path (Brute Force): ${result.path ? result.path.join(' -> ') : 'No path found'} <br>
+                Distance: ${result.distance} <br>
+                Execution Time: ${executionTime.toFixed(2)} ms <br>
+                Complexity: ${complexity}
+            `;
+        }
+
+        function exhaustiveSearch(startNode, endNode, edges) {
+            function dfs(node, endNode, visited, path, distance) {
+                if (node === endNode) {
+                    if (distance < result.distance) {
+                        result.distance = distance;
+                        result.path = path.slice();
+                    }
+                    return;
+                }
+                visited.add(node);
+                for (let edge of edges) {
+                    if (edge.from === node && !visited.has(edge.to)) {
+                        path.push(edge.to);
+                        dfs(edge.to, endNode, visited, path, distance + edge.weight);
+                        path.pop();
+                    } else if (edge.to === node && !visited.has(edge.from)) {
+                        path.push(edge.from);
+                        dfs(edge.from, endNode, visited, path, distance + edge.weight);
+                        path.pop();
+                    }
+                }
+                visited.delete(node);
+            }
+
+            let result = {
+                distance: Infinity,
+                path: null
+            };
+            dfs(startNode, endNode, new Set(), [startNode], 0);
+            return result;
+        }
+
+        function findGreedyPath() {
+            var startNode = parseInt(document.getElementById('startNode').value);
+            var endNode = parseInt(document.getElementById('endNode').value);
+
+            var allEdges = edges.get();
+            var visited = new Set();
+            var path = [];
+            var totalDistance = 0;
+            var currentNode = startNode;
+            var startTime = performance.now();
+
+            while (currentNode !== endNode && !visited.has(currentNode)) {
+                visited.add(currentNode);
+                path.push(currentNode);
+
+                var edgesFromCurrent = allEdges.filter(edge => edge.from === currentNode || edge.to === currentNode);
+                edgesFromCurrent.sort((a, b) => a.weight - b.weight);
+
+                var nextEdge = edgesFromCurrent.find(edge => !visited.has(edge.from === currentNode ? edge.to : edge.from));
+
+                if (!nextEdge) {
+                    path = null;
+                    break;
+                }
+
+                totalDistance += nextEdge.weight;
+                currentNode = nextEdge.from === currentNode ? nextEdge.to : nextEdge.from;
+            }
+
+            if (currentNode === endNode) {
+                path.push(endNode);
+            } else {
+                path = null;
+            }
+
+            var endTime = performance.now();
+            var executionTime = endTime - startTime;
+
+            var outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = `
+                Shortest Path (Greedy): ${path ? path.join(' -> ') : 'No path found'} <br>
+                Distance: ${totalDistance} <br>
+                Execution Time: ${executionTime.toFixed(2)} ms <br>
+                Complexity: O(E log E) (due to sorting edges)
+            `;
+        }
+
+        function calculatePathDistance(path, edges) {
+            var distance = 0;
+            for (var i = 0; i < path.length - 1; i++) {
+                var from = path[i];
+                var to = path[i + 1];
+                var edge = edges.find(edge => (edge.from === from && edge.to === to) || (edge.from === to && edge.to === from));
+                if (edge) {
+                    distance += edge.weight;
+                } else {
+                    return Infinity;  // Path is not valid
+                }
+            }
+            return distance;
+        }
+
+        function permute(permutation) {
+            var length = permutation.length,
+                result = [permutation.slice()],
+                c = new Array(length).fill(0),
+                i = 1, k, p;
+
+            while (i < length) {
+                if (c[i] < i) {
+                    k = i % 2 && c[i];
+                    p = permutation[i];
+                    permutation[i] = permutation[k];
+                    permutation[k] = p;
+                    ++c[i];
+                    i = 1;
+                    result.push(permutation.slice());
+                } else {
+                    c[i] = 0;
+                    ++i;
+                }
+            }
+            return result;
+        }
+
+        function factorial(n) {
+            return n <= 1 ? 1 : n * factorial(n - 1);
+        }
+    </script>
+</body>
+</html>
